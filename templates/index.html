@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduGPT | Academic Tutor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --primary: #00f0ff; /* Cyan for Hologram */
+            --edu-blue: #3b82f6;
+            --bg-dark: #050509;
+            --glass-strong: rgba(20, 20, 35, 0.85);
+            --border: rgba(0, 240, 255, 0.15); /* Holographic border color */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: #ececf1;
+            margin: 0;
+            overflow: hidden;
+            height: 100vh;
+            perspective: 1000px; /* Enable 3D perspective for UI */
+        }
+
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background: #050509; 
+        }
+
+        .app-container {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+            background: transparent;
+        }
+
+        /* HOLOGRAPHIC SIDEBAR */
+        .sidebar {
+            width: 280px;
+            background: rgba(0, 10, 20, 0.6);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            transform-style: preserve-3d;
+            transition: transform 0.1s ease-out; /* Smooth tilt */
+            box-shadow: 10px 0 30px rgba(0, 240, 255, 0.05);
+        }
+
+        .main-chat {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: transparent;
+            position: relative;
+        }
+
+        .message-row {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            padding: 32px 16px;
+            transition: all 0.3s ease;
+        }
+
+        /* REMOVED BLUR AND BACKGROUND FOR TRANSPARENCY */
+        .message-row.ai {
+            background: transparent;
+            backdrop-filter: none;
+            border: none;
+        }
+
+        .message-row.user {
+            background: transparent;
+        }
+
+        .message-content {
+            max-width: 800px;
+            width: 100%;
+            display: flex;
+            gap: 24px;
+            text-shadow: 0 0 10px rgba(0, 240, 255, 0.2); /* Holographic text glow */
+        }
+
+        .avatar {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 18px;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: transform 0.3s ease;
+            position: relative;
+            z-index: 2;
+        }
+
+        .message-row:hover .avatar { transform: scale(1.1) rotate(5deg); }
+
+        .ai .avatar { 
+            background: linear-gradient(135deg, #00f0ff, #0066ff); 
+            color: black;
+            font-weight: bold;
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.5);
+        }
+
+        .user .avatar { 
+            background: linear-gradient(135deg, #a855f7, #6b21a8); 
+            color: white; 
+            box-shadow: 0 0 15px rgba(168, 85, 247, 0.3);
+        }
+
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: rgba(0, 240, 255, 0.2); border-radius: 10px; }
+
+        .input-container {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            position: relative;
+            padding: 0 16px 24px 16px;
+            perspective: 1000px;
+        }
+
+        /* FLOATING INPUT BOX */
+        .input-box {
+            background: rgba(10, 20, 40, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 16px 24px;
+            box-shadow: 0 20px 50px -10px rgba(0,0,0,0.9), 0 0 20px rgba(0, 240, 255, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transform-style: preserve-3d;
+            transition: transform 0.1s ease-out;
+        }
+
+        .input-box input {
+            background: transparent;
+            border: none;
+            color: white;
+            flex: 1;
+            outline: none;
+            font-size: 16px;
+        }
+
+        .send-btn {
+            background: var(--primary);
+            color: black;
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.5;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            box-shadow: 0 0 15px var(--primary);
+        }
+
+        .send-btn.active { 
+            opacity: 1; 
+            transform: scale(1.1);
+            background: #00f0ff;
+            box-shadow: 0 0 30px #00f0ff;
+        }
+        
+        .progress-bar {
+            height: 6px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00f0ff, #0066ff);
+            width: 25%;
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 10px #00f0ff;
+        }
+
+        @keyframes pulse-icon {
+            0% { box-shadow: 0 0 0 0 rgba(0, 240, 255, 0.4); }
+            70% { box-shadow: 0 0 0 15px rgba(0, 240, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 240, 255, 0); }
+        }
+        .ai .avatar i { animation: pulse-icon 2s infinite; border-radius: 50%; }
+
+        .typing-indicator { display: inline-flex; gap: 4px; }
+        .typing-dot {
+            width: 4px;
+            height: 4px;
+            background: #00f0ff;
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out both;
+            box-shadow: 0 0 5px #00f0ff;
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1.0); } }
+
+        /* Holographic Scanline Overlay */
+        .holo-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(transparent 50%, rgba(0, 240, 255, 0.02) 50%);
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="bg-canvas"></canvas>
+    <div class="holo-overlay"></div>
+
+    <div class="app-container">
+        <!-- Holographic Sidebar -->
+        <aside class="sidebar hidden md:flex" id="sidebar-panel">
+            <div class="p-6">
+                <button onclick="window.location.reload()" class="w-full bg-cyan-500/10 border border-cyan-500/30 rounded-2xl p-4 text-sm font-semibold text-left flex items-center gap-4 hover:bg-cyan-500/20 transition-all group shadow-[0_0_15px_rgba(0,240,255,0.1)]">
+                    <span class="w-8 h-8 rounded-lg bg-cyan-400/20 flex items-center justify-center group-hover:bg-cyan-400/40">
+                        <i class="fas fa-plus text-cyan-300"></i>
+                    </span>
+                    New Session
+                </button>
+            </div>
+            
+            <div class="px-6 py-4 bg-cyan-900/10 mx-4 rounded-2xl border border-cyan-500/20 backdrop-blur-md">
+                <p class="text-[10px] font-bold text-cyan-500/70 uppercase tracking-widest mb-3">Holo-Progress</p>
+                <div class="progress-bar"><div class="progress-fill" id="lesson-progress"></div></div>
+                <div class="flex justify-between mt-2">
+                    <span class="text-[10px] text-gray-400">Sync Level</span>
+                    <span class="text-[10px] font-bold text-cyan-400" id="mastery-percent">25%</span>
+                </div>
+            </div>
+
+            <div id="history-list" class="flex-1 overflow-y-auto custom-scroll p-6 mt-2 space-y-4">
+                <p class="text-[10px] font-bold text-cyan-500/50 uppercase tracking-widest mb-2">Neural Logs ✨</p>
+                <div id="notes-container">
+                    <div class="p-4 rounded-xl bg-cyan-500/5 border border-cyan-500/20 text-[11px] text-cyan-100 leading-relaxed mb-4 shadow-[0_0_10px_rgba(0,240,255,0.05)]">
+                        <i class="fas fa-satellite-dish mr-2 text-cyan-400"></i> System online. Holographic render engine active.
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 border-t border-cyan-500/20">
+                <div class="flex items-center gap-4 p-3 rounded-2xl bg-cyan-500/5 border border-cyan-500/10">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-lg shadow-lg">
+                        <i class="fas fa-user-astronaut text-white"></i>
+                    </div>
+                    <div class="flex flex-col">
+                        <span class="text-xs font-bold text-cyan-100">Explorer Mode</span>
+                        <span class="text-[10px] text-cyan-500">Spatial Audio On</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="main-chat">
+            <header class="h-20 flex items-center justify-between px-10 border-b border-cyan-500/10 bg-transparent">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 bg-cyan-500/10 rounded-xl flex items-center justify-center border border-cyan-500/30 shadow-[0_0_15px_rgba(0,240,255,0.2)]">
+                        <i class="fas fa-cube text-cyan-400 animate-pulse"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-base font-bold tracking-tight text-cyan-50">EduGPT <span class="text-[10px] align-top text-cyan-400">HOLO</span></h1>
+                        <p class="text-[10px] text-cyan-500/80 font-medium tracking-wide">3D INTERFACE ACTIVE</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <div class="px-3 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-[10px] text-cyan-400 flex items-center gap-2 shadow-[0_0_10px_rgba(0,240,255,0.1)]">
+                        <div class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></div>
+                        Flask Link Stable
+                    </div>
+                </div>
+            </header>
+
+            <div id="chat-viewport" class="flex-1 overflow-y-auto custom-scroll pt-4">
+                <!-- Initial AI Message -->
+                <div class="message-row ai">
+                    <div class="message-content">
+                        <div class="avatar"><i class="fas fa-robot"></i></div>
+                        <div class="text-sm leading-8 text-cyan-50 pt-1">
+                            Holographic interface loaded. I am hovering in 3D space relative to your cursor.
+                            <br><br>
+                            Send a query to the Python backend to see the neural network react.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-container">
+                <div class="input-box" id="input-panel">
+                    <input type="text" id="user-input" placeholder="Enter command..." autocomplete="off">
+                    <button id="send-btn" class="send-btn">
+                        <i class="fas fa-paper-plane text-xs"></i>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        let sessionScore = 25;
+
+        // --- ENHANCED 3D BACKGROUND ---
+        let scene, camera, renderer, particles, lines, mesh, meshWire, clock;
+        const mouse = new THREE.Vector2();
+
+        function initBackground() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('bg-canvas'), antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            clock = new THREE.Clock();
+            
+            // 1. Inner Core (Solid Glow)
+            const geometry = new THREE.IcosahedronGeometry(10, 1);
+            const material = new THREE.MeshPhongMaterial({ 
+                color: 0x00f0ff, 
+                transparent: true, 
+                opacity: 0.1, 
+                side: THREE.DoubleSide,
+                blending: THREE.AdditiveBlending 
+            });
+            mesh = new THREE.Mesh(geometry, material);
+            scene.add(mesh);
+
+            // 2. Outer Wireframe (Hologram Shell)
+            const wireGeo = new THREE.IcosahedronGeometry(15, 2);
+            const wireMat = new THREE.MeshBasicMaterial({ 
+                color: 0x00f0ff, 
+                wireframe: true, 
+                transparent: true, 
+                opacity: 0.15,
+                blending: THREE.AdditiveBlending
+            });
+            meshWire = new THREE.Mesh(wireGeo, wireMat);
+            scene.add(meshWire);
+
+            // 3. Particles
+            const count = 300;
+            const positions = new Float32Array(count * 3);
+            const velocities = [];
+            for(let i=0; i<count*3; i++) {
+                positions[i] = (Math.random() - 0.5) * 150;
+                velocities.push((Math.random() - 0.5) * 0.05);
+            }
+            const pGeom = new THREE.BufferGeometry();
+            pGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            particles = new THREE.Points(pGeom, new THREE.PointsMaterial({ size: 0.8, color: 0x00f0ff, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending }));
+            particles.userData = { velocities };
+            scene.add(particles);
+
+            // 4. Connectors
+            const lineGeom = new THREE.BufferGeometry();
+            lines = new THREE.LineSegments(lineGeom, new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.15, blending: THREE.AdditiveBlending }));
+            scene.add(lines);
+
+            const pLight = new THREE.PointLight(0x00f0ff, 2, 200);
+            pLight.position.set(20, 30, 40);
+            scene.add(pLight);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.1));
+            camera.position.z = 70;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const t = clock.getElapsedTime();
+            
+            // Hovering Effect (Vertical Bobbing)
+            const hoverY = Math.sin(t * 0.8) * 2;
+            mesh.position.y = hoverY;
+            meshWire.position.y = hoverY;
+            
+            // Rotation
+            mesh.rotation.y = t * 0.2;
+            mesh.rotation.z = t * 0.1;
+            meshWire.rotation.x = -t * 0.1;
+            meshWire.rotation.y = t * 0.05;
+
+            // Pulse Effect
+            meshWire.material.opacity = 0.1 + Math.sin(t * 2) * 0.05;
+
+            // Particles Update
+            const posAttr = particles.geometry.attributes.position;
+            const vels = particles.userData.velocities;
+            const linePositions = [];
+            for (let i = 0; i < posAttr.count; i++) {
+                posAttr.array[i*3] += vels[i*3];
+                posAttr.array[i*3+1] += vels[i*3+1];
+                posAttr.array[i*3+2] += vels[i*3+2];
+                if (Math.abs(posAttr.array[i*3]) > 80) vels[i*3] *= -1;
+                for (let j = i + 1; j < posAttr.count; j++) {
+                    const dx = posAttr.array[i*3] - posAttr.array[j*3];
+                    const dy = posAttr.array[i*3+1] - posAttr.array[j*3+1];
+                    const dz = posAttr.array[i*3+2] - posAttr.array[j*3+2];
+                    if (dx*dx + dy*dy + dz*dz < 900) {
+                        linePositions.push(posAttr.array[i*3], posAttr.array[i*3+1], posAttr.array[i*3+2]);
+                        linePositions.push(posAttr.array[j*3], posAttr.array[j*3+1], posAttr.array[j*3+2]);
+                    }
+                }
+            }
+            posAttr.needsUpdate = true;
+            lines.geometry.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+            
+            // Parallax Scene Tilt
+            scene.rotation.y += (mouse.x * 0.3 - scene.rotation.y) * 0.05;
+            scene.rotation.x += (mouse.y * 0.3 - scene.rotation.x) * 0.05;
+            
+            renderer.render(scene, camera);
+        }
+
+        // --- UI HOLOGRAPHIC TILT ---
+        const sidebar = document.getElementById('sidebar-panel');
+        const inputBox = document.getElementById('input-panel');
+
+        window.addEventListener('mousemove', (e) => {
+            // Update 3D mouse vector
+            mouse.x = (e.clientX / window.innerWidth - 0.5);
+            mouse.y = -(e.clientY / window.innerHeight - 0.5);
+
+            // Calculate Tilt
+            const tiltX = (window.innerWidth / 2 - e.clientX) / 40;
+            const tiltY = (window.innerHeight / 2 - e.clientY) / 40;
+
+            // Apply Tilt to UI Elements
+            if(sidebar) sidebar.style.transform = `rotateY(${-tiltX * 0.5}deg) rotateX(${tiltY * 0.5}deg)`;
+            if(inputBox) inputBox.style.transform = `perspective(1000px) rotateY(${-tiltX}deg) rotateX(${tiltY}deg) translateZ(10px)`;
+        });
+
+        // --- BACKEND LOGIC ---
+        const chatViewport = document.getElementById('chat-viewport');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const progressFill = document.getElementById('lesson-progress');
+        const masteryText = document.getElementById('mastery-percent');
+
+        function createMessage(role, content) {
+            const row = document.createElement('div');
+            row.className = `message-row ${role}`;
+            const icon = role === 'ai' ? 'fa-robot' : 'fa-user-astronaut';
+            row.innerHTML = `
+                <div class="message-content">
+                    <div class="avatar"><i class="fas ${icon}"></i></div>
+                    <div class="text-sm leading-8 text-cyan-50 pt-1">${content}</div>
+                </div>
+            `;
+            chatViewport.appendChild(row);
+            chatViewport.scrollTo({ top: chatViewport.scrollHeight, behavior: 'smooth' });
+            return row;
+        }
+
+        async function handleSend() {
+            const message = userInput.value.trim();
+            if (!message) return;
+            
+            createMessage('user', message);
+            userInput.value = '';
+            sendBtn.classList.remove('active');
+
+            const loadingRow = createMessage('ai', `
+                <div class="typing-indicator">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            `);
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+
+                if (!response.ok) throw new Error('Backend unavailable');
+                const data = await response.json();
+                
+                loadingRow.querySelector('.text-sm').innerHTML = data.reply.replace(/\n/g, '<br>');
+                
+                sessionScore = Math.min(100, sessionScore + 5);
+                progressFill.style.width = sessionScore + '%';
+                masteryText.innerText = sessionScore + '%';
+
+            } catch (error) {
+                loadingRow.querySelector('.text-sm').innerHTML = `<span class="text-red-400"><i class="fas fa-exclamation-triangle mr-2"></i> Connection error. Flask port 8000.</span>`;
+            }
+        }
+
+        userInput.addEventListener('input', () => sendBtn.classList.toggle('active', userInput.value.trim().length > 0));
+        userInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') handleSend(); });
+        sendBtn.addEventListener('click', handleSend);
+
+        window.onload = () => { initBackground(); animate(); };
+    </script>
+</body>
+</html>
